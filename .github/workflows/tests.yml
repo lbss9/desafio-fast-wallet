@@ -1,0 +1,87 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+
+env:
+  NODE_VERSION: 20
+  POSTGRES_PASSWORD: 123456
+  POSTGRES_DB: fastwalletsystem_test
+  DATABASE_URL: postgresql://postgres:123456@localhost:5433/fastwalletsystem_test
+  REDIS_URL: redis://localhost:6379
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: 123456
+          POSTGRES_DB: fastwalletsystem_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      # Checkout do código
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # Cache das dependências
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Instalar dependências
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint
+      - name: Run ESLint
+        run: npm run lint
+
+      # Build
+      - name: Build application
+        run: npm run build
+
+      # Testes unitários
+      - name: Run unit tests
+        run: npm run test
+
+      # Testes E2E (usa configurações do pre-run-envs.e2e.ts)
+      - name: Run E2E tests
+        run: npm run test:e2e
